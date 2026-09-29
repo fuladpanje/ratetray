@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RateTray</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <main class="card">
+      <p class="error" id="error"></p>
+
+      <section class="panel" id="cur-list"></section>
+
+      <div class="actions">
+        <button id="refresh">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10"/><path d="M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>
+          بروزرسانی
+        </button>
+        <button id="copy" class="secondary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          کپی
+        </button>
+      </div>
+
+      <section class="panel">
+        <div class="panel-row">
+          <label for="interval">بازرسانی خودکار</label>
+          <select id="interval">
+            <option value="60">هر ۱ دقیقه</option>
+            <option value="300">هر ۵ دقیقه</option>
+            <option value="900">هر ۱۵ دقیقه</option>
+            <option value="1800">هر ۳۰ دقیقه</option>
+            <option value="3600">هر ۶۰ دقیقه</option>
+          </select>
+        </div>
+        <div class="panel-row">
+          <label for="autostart">اجرا خودکار برنامه</label>
+          <span class="switch">
+            <input type="checkbox" id="autostart" />
+            <span class="slider"></span>
+          </span>
+        </div>
+      </section>
+
+      <footer class="credit">
+        <a href="#" id="gh-link">Rez Fuladpanjeh</a>
+      </footer>
+    </main>
+  </body>
+</html>
