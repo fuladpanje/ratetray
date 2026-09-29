@@ -107,9 +107,11 @@ pub fn render(text: &str) -> Vec<u8> {
     let mut buf = vec![0u8; (W * H * 4) as usize];
 
     let row_h = GH * scale;
-    let gap_v = scale;
+    // Even pitch keeps every row on even pixels (crisp after downscale).
+    let gap_v = if scale == 1 { 2 } else { scale };
     let total_h = rows.len() as u32 * row_h + (rows.len() as u32 - 1) * gap_v;
-    let y_start = H.saturating_sub(total_h) / 2;
+    // Even origin: odd y offsets blur when Windows downscales 32 -> 16.
+    let y_start = (H.saturating_sub(total_h) / 2) & !1;
 
     let mut offset = 0;
     for (ri, &row_len) in rows.iter().enumerate() {
@@ -123,7 +125,7 @@ pub fn render(text: &str) -> Vec<u8> {
             1
         };
         let text_w = (GW * row_len as u32 + gap * (row_len as u32 - 1)) * scale;
-        let x0 = (W.saturating_sub(text_w)) / 2;
+        let x0 = ((W.saturating_sub(text_w)) / 2) & !1;
         let y0 = y_start + ri as u32 * (row_h + gap_v);
 
         for i in 0..row_len {
@@ -188,12 +190,12 @@ mod tests {
     #[test]
     fn four_digits_two_rows() {
         let buf = render("1020");
-        // Two 12px rows with a 2px gap: [3,15) / gap [15,17) / [17,29)
-        assert!(band_has_pixels(&buf, 3, 15), "top row missing");
-        assert!(band_has_pixels(&buf, 17, 29), "bottom row missing");
-        assert!(!band_has_pixels(&buf, 15, 17), "gap between rows must stay empty");
-        assert!(!band_has_pixels(&buf, 0, 3), "unexpected pixels above");
-        assert!(!band_has_pixels(&buf, 29, 32), "unexpected pixels below");
+        // Two 12px rows with a 2px gap, even origin: [2,14) / gap [14,16) / [16,28)
+        assert!(band_has_pixels(&buf, 2, 14), "top row missing");
+        assert!(band_has_pixels(&buf, 16, 28), "bottom row missing");
+        assert!(!band_has_pixels(&buf, 14, 16), "gap between rows must stay empty");
+        assert!(!band_has_pixels(&buf, 0, 2), "unexpected pixels above");
+        assert!(!band_has_pixels(&buf, 28, 32), "unexpected pixels below");
     }
 
     #[test]
@@ -275,8 +277,17 @@ mod tests {
     fn five_and_six_digits_fit() {
         for text in ["10200", "102000"] {
             let buf = render(text);
-            assert!(band_has_pixels(&buf, 3, 15), "{text}: top row missing");
-            assert!(band_has_pixels(&buf, 17, 29), "{text}: bottom row missing");
+            assert!(band_has_pixels(&buf, 2, 14), "{text}: top row missing");
+            assert!(band_has_pixels(&buf, 16, 28), "{text}: bottom row missing");
         }
+    }
+
+    #[test]
+    fn seven_digits_scale1_even_rows() {
+        let buf = render("1234567");
+        // scale 1, even pitch: rows [8,14) and [16,22).
+        assert!(band_has_pixels(&buf, 8, 14), "top row missing");
+        assert!(band_has_pixels(&buf, 16, 22), "bottom row missing");
+        assert!(!band_has_pixels(&buf, 14, 16), "gap must stay empty");
     }
 }
