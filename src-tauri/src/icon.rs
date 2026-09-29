@@ -110,8 +110,9 @@ pub fn render(text: &str) -> Vec<u8> {
     let mut offset = 0;
     for (ri, &row_len) in rows.iter().enumerate() {
         let gap: u32 = if row_len == 2 {
-            // Slightly wider tracking so two characters fill the icon nicely.
-            3
+            // Gap 2 keeps digits grouped; even geometry stays crisp when
+            // Windows downscales the icon (odd offsets blur).
+            2
         } else if GW * row_len as u32 + (row_len as u32 - 1) > W / scale {
             0
         } else {
@@ -202,7 +203,7 @@ mod tests {
     #[test]
     fn two_digits_fill_width() {
         let buf = render("69");
-        // Two chars with slightly wider tracking.
+        // Tight even geometry: x0 = 6 (even), so downscaling stays crisp.
         assert!(band_has_pixels(&buf, 10, 22), "digits missing");
         let mut min_x = W;
         let mut max_x = 0;
@@ -214,7 +215,7 @@ mod tests {
                 }
             }
         }
-        assert!(min_x <= 6 && max_x >= 24, "digits should span the icon width");
+        assert!(min_x <= 7 && max_x >= 24, "digits should span the icon width");
     }
 
     #[test]
@@ -223,6 +224,23 @@ mod tests {
         // 3 chars -> scale 2 single row [10, 22); dot at x 14..17, y 18..21.
         assert!(band_has_pixels(&buf, 10, 22), "digits missing");
         assert!(opaque(&buf, 15, 19), "decimal dot missing");
+    }
+
+    #[test]
+    fn text_origins_stay_even() {
+        // Even x origins keep edges crisp when Windows downscales 32 -> 16.
+        for text in ["254", "25M", "5.2", "69", "--"] {
+            let buf = render(text);
+            let mut min_x = W;
+            for y in 0..H {
+                for x in 0..W {
+                    if opaque(&buf, x, y) {
+                        min_x = min_x.min(x);
+                    }
+                }
+            }
+            assert_eq!(min_x % 2, 0, "{text}: odd origin blurs on downscale");
+        }
     }
 
     #[test]
