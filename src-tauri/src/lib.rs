@@ -12,12 +12,28 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 const DEFAULT_REFRESH_SECS: u64 = 60;
 
+#[derive(Clone, Copy, PartialEq)]
+enum Unit {
+    Toman,
+    Dollar,
+}
+
+impl Unit {
+    fn label(self) -> &'static str {
+        match self {
+            Unit::Toman => "تومان",
+            Unit::Dollar => "دلار",
+        }
+    }
+}
+
 struct Currency {
     id: &'static str,
     name: &'static str,
     symbol: &'static str,
-    /// "metal" for gold/silver, "fx" for currencies.
+    /// metal | base | oil | crypto | fx
     group: &'static str,
+    unit: Unit,
     url: &'static str,
     /// info-bar element id; `None` = use the main price span of the profile page.
     elem: Option<&'static str>,
@@ -29,6 +45,7 @@ const CURRENCIES: &[Currency] = &[
         name: "طلای ۱۸ عیار (گرم)",
         symbol: "Au",
         group: "metal",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/geram18",
         elem: None,
     },
@@ -37,7 +54,134 @@ const CURRENCIES: &[Currency] = &[
         name: "نقره ۹۹۹ (گرم)",
         symbol: "Ag",
         group: "metal",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/silver_999",
+        elem: None,
+    },
+    Currency {
+        id: "aluminum",
+        name: "آلومینیوم",
+        symbol: "Al",
+        group: "base",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/aluminum",
+        elem: None,
+    },
+    Currency {
+        id: "copper",
+        name: "مس",
+        symbol: "Cu",
+        group: "base",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/copper",
+        elem: None,
+    },
+    Currency {
+        id: "lead",
+        name: "سرب",
+        symbol: "Pb",
+        group: "base",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/lead",
+        elem: None,
+    },
+    Currency {
+        id: "zinc",
+        name: "روی",
+        symbol: "Zn",
+        group: "base",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/zinc",
+        elem: None,
+    },
+    Currency {
+        id: "nickel",
+        name: "نیکل",
+        symbol: "Ni",
+        group: "base",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/nickel",
+        elem: None,
+    },
+    Currency {
+        id: "oilbrent",
+        name: "نفت برنت",
+        symbol: "Br",
+        group: "oil",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/oil_brent",
+        elem: None,
+    },
+    Currency {
+        id: "btc",
+        name: "بیت کوین",
+        symbol: "BTC",
+        group: "crypto",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/crypto-bitcoin",
+        elem: None,
+    },
+    Currency {
+        id: "eth",
+        name: "اتریوم",
+        symbol: "ETH",
+        group: "crypto",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/crypto-ethereum",
+        elem: None,
+    },
+    Currency {
+        id: "usdt",
+        name: "تتر",
+        symbol: "USDT",
+        group: "crypto",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/crypto-tether",
+        elem: None,
+    },
+    Currency {
+        id: "trx",
+        name: "ترون",
+        symbol: "TRX",
+        group: "crypto",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/crypto-tron",
+        elem: None,
+    },
+    Currency {
+        id: "xrp",
+        name: "ریپل",
+        symbol: "XRP",
+        group: "crypto",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/crypto-ripple",
+        elem: None,
+    },
+    Currency {
+        id: "ada",
+        name: "کاردانو",
+        symbol: "ADA",
+        group: "crypto",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/crypto-cardano",
+        elem: None,
+    },
+    Currency {
+        id: "doge",
+        name: "دوج کوین",
+        symbol: "DOGE",
+        group: "crypto",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/crypto-dogecoin",
+        elem: None,
+    },
+    Currency {
+        id: "sol",
+        name: "سولانا",
+        symbol: "SOL",
+        group: "crypto",
+        unit: Unit::Dollar,
+        url: "https://tgju.org/profile/crypto-solana",
         elem: None,
     },
     Currency {
@@ -45,6 +189,7 @@ const CURRENCIES: &[Currency] = &[
         name: "دلار",
         symbol: "$",
         group: "fx",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/price_dollar_rtl",
         elem: Some("l-price_dollar_rl"),
     },
@@ -53,6 +198,7 @@ const CURRENCIES: &[Currency] = &[
         name: "یورو",
         symbol: "€",
         group: "fx",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/price_eur",
         elem: None,
     },
@@ -61,6 +207,7 @@ const CURRENCIES: &[Currency] = &[
         name: "دلار کانادا",
         symbol: "C$",
         group: "fx",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/price_cad",
         elem: None,
     },
@@ -69,6 +216,7 @@ const CURRENCIES: &[Currency] = &[
         name: "لیر ترکیه",
         symbol: "₺",
         group: "fx",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/price_try",
         elem: None,
     },
@@ -77,6 +225,7 @@ const CURRENCIES: &[Currency] = &[
         name: "پوند انگلیس",
         symbol: "£",
         group: "fx",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/price_gbp",
         elem: None,
     },
@@ -85,6 +234,7 @@ const CURRENCIES: &[Currency] = &[
         name: "درهم امارات",
         symbol: "د.إ",
         group: "fx",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/price_aed",
         elem: None,
     },
@@ -93,6 +243,7 @@ const CURRENCIES: &[Currency] = &[
         name: "یوان چین",
         symbol: "¥",
         group: "fx",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/price_cny",
         elem: None,
     },
@@ -101,6 +252,7 @@ const CURRENCIES: &[Currency] = &[
         name: "ین ژاپن (۱۰۰)",
         symbol: "¥",
         group: "fx",
+        unit: Unit::Toman,
         url: "https://tgju.org/profile/price_jpy",
         elem: None,
     },
@@ -112,7 +264,8 @@ fn find_currency(id: &str) -> Option<&'static Currency> {
 
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 struct CurrencyPrice {
-    rial: Option<u64>,
+    /// Price in native unit: toman for Toman items, dollars for Dollar items.
+    value: Option<f64>,
     change_pct: Option<f64>,
     updated_at: Option<String>,
     error: Option<String>,
@@ -140,7 +293,8 @@ struct CurrencyRow {
     name: String,
     symbol: String,
     group: String,
-    rial: Option<u64>,
+    unit: String,
+    value: Option<f64>,
     change_pct: Option<f64>,
     updated_at: Option<String>,
     error: Option<String>,
@@ -164,7 +318,8 @@ fn snapshot(state: &AppState) -> AllPrices {
                 name: c.name.to_string(),
                 symbol: c.symbol.to_string(),
                 group: c.group.to_string(),
-                rial: p.rial,
+                unit: c.unit.label().to_string(),
+                value: p.value,
                 change_pct: p.change_pct,
                 updated_at: p.updated_at,
                 error: p.error,
@@ -174,7 +329,7 @@ fn snapshot(state: &AppState) -> AllPrices {
     AllPrices { selected, items }
 }
 
-fn parse_price(html: &str, cur: &Currency) -> Result<(u64, f64), String> {
+fn parse_price(html: &str, cur: &Currency) -> Result<(f64, Option<f64>), String> {
     if let Some(elem) = cur.elem {
         let re = regex::Regex::new(&format!(
             r#"(?s)<li id="{elem}".*?info-price">([\d,]+)</span>.*?info-change">\((-?[\d.]+)%\)"#
@@ -183,44 +338,53 @@ fn parse_price(html: &str, cur: &Currency) -> Result<(u64, f64), String> {
         let caps = re
             .captures(html)
             .ok_or_else(|| "اطلاعات قیمت در پاسخ سایت پیدا نشد".to_string())?;
-        let rial: u64 = caps[1]
+        let rial: f64 = caps[1]
             .replace(',', "")
             .parse::<f64>()
-            .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())? as u64;
+            .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())?;
         let change: f64 = caps[2]
             .parse()
             .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())?;
-        Ok((rial, change))
+        Ok((rial / 10.0, Some(change)))
     } else {
         let re_price = regex::Regex::new(
             r#"<span class="price" data-col="info\.last_trade\.PDrCotVal">([\d,.]+)</span>"#,
         )
         .map_err(|_| "خطای داخلی برنامه".to_string())?;
         let re_change = regex::Regex::new(
-            r#"<span class="change change-(up|down) change-percentage">(-?[\d.]+)<"#,
+            r#"<span class="change change-(up|down|no) change-percentage">([^<]*)<"#,
         )
         .map_err(|_| "خطای داخلی برنامه".to_string())?;
 
         let price_cap = re_price
             .captures(html)
             .ok_or_else(|| "اطلاعات قیمت در پاسخ سایت پیدا نشد".to_string())?;
-        let rial: u64 = price_cap[1]
+        let raw: f64 = price_cap[1]
             .replace(',', "")
             .parse::<f64>()
-            .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())? as u64;
+            .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())?;
+        let value = match cur.unit {
+            Unit::Toman => raw / 10.0,
+            Unit::Dollar => raw,
+        };
 
         let change_cap = re_change
             .captures(html)
             .ok_or_else(|| "اطلاعات قیمت در پاسخ سایت پیدا نشد".to_string())?;
-        let magnitude: f64 = change_cap[2]
-            .parse()
-            .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())?;
-        let change = if &change_cap[1] == "down" {
-            -magnitude.abs()
+        let change = if &change_cap[1] == "no" {
+            None
         } else {
-            magnitude.abs()
+            let magnitude: f64 = change_cap[2]
+                .trim()
+                .parse()
+                .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())?;
+            Some(if &change_cap[1] == "down" {
+                -magnitude.abs()
+            } else {
+                magnitude.abs()
+            })
         };
-        Ok((rial, change))
+        Ok((value, change))
     }
 }
 
@@ -239,7 +403,7 @@ fn friendly(err: &str) -> String {
     }
 }
 
-async fn fetch_price(cur: &Currency) -> Result<(u64, f64), String> {
+async fn fetch_price(cur: &Currency) -> Result<(f64, Option<f64>), String> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
         .timeout(Duration::from_secs(20))
@@ -273,20 +437,42 @@ fn group(n: u64) -> String {
 /// Short text for the tray icon: plain thousands (e.g. "254"),
 /// one decimal below 10 thousand (e.g. "5.2"),
 /// or millions with an M suffix once it no longer fits (e.g. "25M").
-fn icon_text(rial: Option<u64>) -> String {
-    match rial {
-        Some(r) => {
-            let toman = r / 10;
-            let thousands = (toman + 500) / 1000;
-            if thousands >= 1000 {
-                format!("{}M", (toman + 500_000) / 1_000_000)
-            } else if thousands >= 10 {
-                format!("{thousands}")
+///
+/// `usd` switches the same tiers to thousands of dollars.
+fn icon_text(value: Option<f64>, usd: bool) -> String {
+    match value {
+        Some(v) => {
+            if usd {
+                let k = v / 1000.0;
+                if k >= 1000.0 {
+                    format!("{}M", ((v + 500_000.0) / 1_000_000.0).floor() as u64)
+                } else if k >= 10.0 {
+                    format!("{}", (k + 0.5).floor() as u64)
+                } else {
+                    format!("{}.{}", k.floor() as u64, (k.fract() * 10.0).floor() as u64)
+                }
             } else {
-                format!("{}.{}", toman / 1000, (toman % 1000) / 100)
+                let thousands = ((v + 500.0) / 1000.0).floor() as u64;
+                if thousands >= 1000 {
+                    format!("{}M", ((v + 500_000.0) / 1_000_000.0).floor() as u64)
+                } else if thousands >= 10 {
+                    format!("{thousands}")
+                } else {
+                    let t = v.floor() as u64;
+                    format!("{}.{}", t / 1000, (t % 1000) / 100)
+                }
             }
         }
         None => "--".to_string(),
+    }
+}
+
+/// Row/tooltip price for dollar-denominated items.
+fn fmt_usd(v: f64) -> String {
+    if v >= 100.0 {
+        group((v + 0.5).floor() as u64)
+    } else {
+        format!("{:.2}", (v * 100.0).round() / 100.0)
     }
 }
 
@@ -300,13 +486,21 @@ fn apply_selected(app: &AppHandle) {
         .get(&sel)
         .cloned()
         .unwrap_or_default();
-    let name = find_currency(&sel).map(|c| c.name).unwrap_or("قیمت");
+    let cur = find_currency(&sel);
+    let usd = matches!(cur.map(|c| c.unit), Some(Unit::Dollar));
+    let name = cur.map(|c| c.name).unwrap_or("قیمت");
+    let unit_label = cur.map(|c| c.unit.label()).unwrap_or("تومان");
     if let Some(tray) = app.tray_by_id("main") {
-        let text = icon_text(entry.rial);
+        let text = icon_text(entry.value, usd);
         let img = Image::new_owned(icon::render(&text), W, H);
         let _ = tray.set_icon(Some(img));
-        let tooltip = match entry.rial {
-            Some(r) => {
+        let tooltip = match entry.value {
+            Some(v) => {
+                let price = if usd {
+                    fmt_usd(v)
+                } else {
+                    group(v.floor() as u64)
+                };
                 let change = entry
                     .change_pct
                     .map(|c| format!(" | {c:+.2}%"))
@@ -317,7 +511,7 @@ fn apply_selected(app: &AppHandle) {
                     .map(|t| format!(" | {t}"))
                     .unwrap_or_default();
                 let err = if entry.error.is_some() { " | خطا" } else { "" };
-                format!("{name}: {} تومان{change}{time}{err}", group(r / 10))
+                format!("{name}: {price} {unit_label}{change}{time}{err}")
             }
             None => format!("در حال دریافت قیمت {name}..."),
         };
@@ -335,11 +529,11 @@ async fn do_fetch(app: &AppHandle, id: &str) {
     };
     let state = app.state::<AppState>();
     match fetch_price(cur).await {
-        Ok((rial, change)) => {
+        Ok((value, change)) => {
             let mut map = state.prices.lock().unwrap();
             let entry = map.entry(id.to_string()).or_default();
-            entry.rial = Some(rial);
-            entry.change_pct = Some(change);
+            entry.value = Some(value);
+            entry.change_pct = change;
             entry.updated_at = Some(chrono::Local::now().format("%H:%M").to_string());
             entry.error = None;
         }
@@ -356,15 +550,56 @@ async fn do_fetch(app: &AppHandle, id: &str) {
     let _ = app.emit("prices-updated", snapshot(&state));
 }
 
-/// Fetches all currencies concurrently (each on its own thread).
-fn spawn_all(app: &AppHandle) {
-    for c in CURRENCIES {
-        let app = app.clone();
-        let id = c.id;
-        std::thread::spawn(move || {
-            tauri::async_runtime::block_on(do_fetch(&app, id));
-        });
+/// Fetches all currencies with limited concurrency (batches of 6):
+/// fast, but gentle enough not to get throttled by the source site.
+/// Failed items get one retry pass in smaller batches.
+fn fetch_all_blocking(app: &AppHandle) {
+    for chunk in CURRENCIES.chunks(6) {
+        let handles: Vec<std::thread::JoinHandle<()>> = chunk
+            .iter()
+            .map(|c| {
+                let app = app.clone();
+                let id = c.id;
+                std::thread::spawn(move || {
+                    tauri::async_runtime::block_on(do_fetch(&app, id));
+                })
+            })
+            .collect();
+        for h in handles {
+            let _ = h.join();
+        }
     }
+    let retry: Vec<&'static str> = {
+        let state = app.state::<AppState>();
+        let map = state.prices.lock().unwrap();
+        CURRENCIES
+            .iter()
+            .filter(|c| map.get(c.id).is_some_and(|e| e.error.is_some()))
+            .map(|c| c.id)
+            .collect()
+    };
+    for chunk in retry.chunks(3) {
+        let handles: Vec<std::thread::JoinHandle<()>> = chunk
+            .iter()
+            .map(|id| {
+                let app = app.clone();
+                let id = *id;
+                std::thread::spawn(move || {
+                    tauri::async_runtime::block_on(do_fetch(&app, id));
+                })
+            })
+            .collect();
+        for h in handles {
+            let _ = h.join();
+        }
+    }
+}
+
+fn spawn_all(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        fetch_all_blocking(&app);
+    });
 }
 
 fn show_window(app: &AppHandle) {
@@ -540,19 +775,7 @@ pub fn run() {
                         .refresh_secs
                         .load(Ordering::Relaxed);
                     if last.elapsed().as_secs() >= interval {
-                        let handles: Vec<std::thread::JoinHandle<()>> = CURRENCIES
-                            .iter()
-                            .map(|c| {
-                                let app = handle.clone();
-                                let id = c.id;
-                                std::thread::spawn(move || {
-                                    tauri::async_runtime::block_on(do_fetch(&app, id));
-                                })
-                            })
-                            .collect();
-                        for h in handles {
-                            let _ = h.join();
-                        }
+                        fetch_all_blocking(&handle);
                         last = Instant::now();
                     }
                 }
@@ -570,16 +793,22 @@ mod tests {
 
     #[test]
     fn icon_text_formats() {
-        assert_eq!(icon_text(Some(2_537_000)), "254"); // dollar
-        assert_eq!(icon_text(Some(252_655_000)), "25M"); // gold gram
-        assert_eq!(icon_text(Some(10_200_000)), "1M"); // 1.02M toman
-        assert_eq!(icon_text(Some(9_995_000)), "1M"); // boundary
-        assert_eq!(icon_text(Some(9_994_999)), "999"); // just below
-        assert_eq!(icon_text(Some(691_090)), "69"); // two digits
-        assert_eq!(icon_text(Some(52_660)), "5.2"); // lira with decimal
-        assert_eq!(icon_text(Some(17_000)), "1.7");
-        assert_eq!(icon_text(Some(5_000)), "0.5");
-        assert_eq!(icon_text(None), "--");
+        assert_eq!(icon_text(Some(253_700.0), false), "254"); // dollar
+        assert_eq!(icon_text(Some(25_265_500.0), false), "25M"); // gold gram
+        assert_eq!(icon_text(Some(1_020_000.0), false), "1M"); // 1.02M toman
+        assert_eq!(icon_text(Some(999_500.0), false), "1M"); // boundary
+        assert_eq!(icon_text(Some(999_499.9), false), "999"); // just below
+        assert_eq!(icon_text(Some(69_109.0), false), "69"); // two digits
+        assert_eq!(icon_text(Some(5_266.0), false), "5.2"); // lira with decimal
+        assert_eq!(icon_text(Some(1_700.0), false), "1.7");
+        assert_eq!(icon_text(Some(500.0), false), "0.5");
+        assert_eq!(icon_text(Some(83_650.17), true), "84"); // bitcoin
+        assert_eq!(icon_text(Some(14_404.4), true), "14"); // copper
+        assert_eq!(icon_text(Some(3_216.5), true), "3.2"); // aluminum
+        assert_eq!(icon_text(Some(102.563), true), "0.1"); // oil
+        assert_eq!(icon_text(Some(1.0), true), "0.0"); // tether
+        assert_eq!(icon_text(None, false), "--");
+        assert_eq!(icon_text(None, true), "--");
     }
 
     #[test]
@@ -597,11 +826,12 @@ mod tests {
             name: "تست",
             symbol: "$",
             group: "fx",
+            unit: Unit::Toman,
             url: "",
             elem: Some("l-test"),
         };
         let html = r#"<li id="l-test" class=" high"><span class="info-value"><span class="info-price">2,537,000</span> <span class="info-change">(3.64%)</span></span></li>"#;
-        assert_eq!(parse_price(html, &cur), Ok((2_537_000, 3.64)));
+        assert_eq!(parse_price(html, &cur), Ok((253_700.0, Some(3.64))));
     }
 
     #[test]
@@ -611,13 +841,44 @@ mod tests {
             name: "تست",
             symbol: "₺",
             group: "fx",
+            unit: Unit::Toman,
             url: "",
             elem: None,
         };
         let up = r#"<span class="price" data-col="info.last_trade.PDrCotVal">52,665</span><span class="change-tag" data-col="info.last_trade.last_change_percentage"><span class="change change-up change-percentage">3.74</span></span>"#;
-        assert_eq!(parse_price(up, &cur), Ok((52_665, 3.74)));
+        assert_eq!(parse_price(up, &cur), Ok((5_266.5, Some(3.74))));
         let down = up.replace("change-up", "change-down");
-        assert_eq!(parse_price(&down, &cur), Ok((52_665, -3.74)));
+        assert_eq!(parse_price(&down, &cur), Ok((5_266.5, Some(-3.74))));
+    }
+
+    #[test]
+    fn parse_dollar_branch() {
+        let cur = Currency {
+            id: "t",
+            name: "تست",
+            symbol: "Br",
+            group: "oil",
+            unit: Unit::Dollar,
+            url: "",
+            elem: None,
+        };
+        let html = r#"<span class="price" data-col="info.last_trade.PDrCotVal">102.563</span><span class="change-tag" data-col="info.last_trade.last_change_percentage"><span class="change change-up change-percentage">0.13</span></span>"#;
+        assert_eq!(parse_price(html, &cur), Ok((102.563, Some(0.13))));
+    }
+
+    #[test]
+    fn parse_no_change_branch() {
+        let cur = Currency {
+            id: "t",
+            name: "تست",
+            symbol: "Al",
+            group: "base",
+            unit: Unit::Dollar,
+            url: "",
+            elem: None,
+        };
+        let html = r#"<span class="price" data-col="info.last_trade.PDrCotVal">3,216.5</span> <span class="change-tag" data-col="info.last_trade.last_change_percentage"> <span class="change change-no change-percentage">-</span> </span>"#;
+        assert_eq!(parse_price(html, &cur), Ok((3_216.5, None)));
     }
 
     #[test]
@@ -627,6 +888,7 @@ mod tests {
             name: "تست",
             symbol: "$",
             group: "fx",
+            unit: Unit::Toman,
             url: "",
             elem: Some("l-missing"),
         };

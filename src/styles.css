@@ -234,9 +234,30 @@ h1 {
 #cur-list {
   display: flex;
   flex-direction: column;
+  max-height: 440px;
+  overflow-y: auto;
+}
+
+#cur-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+#cur-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#cur-list::-webkit-scrollbar-thumb {
+  background: #3a3a44;
+  border-radius: 4px;
 }
 
 .cur-sec {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 11px;
   color: #8a8a95;
   padding: 6px 12px 4px;
@@ -246,6 +267,14 @@ h1 {
 
 .cur-sec:first-child {
   border-top: none;
+}
+
+.sec-unit {
+  font-size: 10px;
+  color: #6a6a76;
+  border: 1px solid #34343e;
+  border-radius: 6px;
+  padding: 1px 7px;
 }
 
 .cur-row {
@@ -293,6 +322,11 @@ h1 {
   font-weight: 700;
   font-size: 12px;
   flex-shrink: 0;
+}
+
+.cur-sym.long {
+  font-size: 10px;
+  letter-spacing: 0;
 }
 
 .cur-name {

@@ -9,7 +9,8 @@ interface CurrencyRow {
   name: string;
   symbol: string;
   group: string;
-  rial: number | null;
+  unit: string;
+  value: number | null;
   change_pct: number | null;
   updated_at: string | null;
   error: string | null;
@@ -26,28 +27,42 @@ const intervalSel = document.getElementById("interval") as HTMLSelectElement;
 const autostartChk = document.getElementById("autostart") as HTMLInputElement;
 const listEl = document.getElementById("cur-list")!;
 
-let lastToman: number | null = null;
+let lastValue: number | null = null;
 let lastName = "دلار";
+let lastUnit = "تومان";
 
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
-function tomanOf(r: CurrencyRow): number | null {
-  return r.rial === null ? null : Math.floor(r.rial / 10);
+function fmtValue(v: number | null, unit: string): string {
+  if (v === null) return "—";
+  if (unit === "دلار") {
+    return v >= 100 ? Math.round(v).toLocaleString("en-US") : v.toFixed(2);
+  }
+  return Math.floor(v).toLocaleString("en-US");
 }
 
-function fmtPrice(t: number | null): string {
-  return t === null ? "—" : t.toLocaleString("en-US");
+function fmtPrice(r: CurrencyRow): string {
+  return fmtValue(r.value, r.unit);
 }
 
-const GROUP_TITLES: Record<string, string> = {
-  metal: "طلا و نقره",
-  fx: "ارزها",
+const GROUP_META: Record<string, { title: string; unit: string }> = {
+  metal: { title: "طلا و نقره", unit: "تومان" },
+  base: { title: "فلزات پایه", unit: "دلار" },
+  oil: { title: "نفت", unit: "دلار" },
+  crypto: { title: "ارز دیجیتال", unit: "دلار" },
+  fx: { title: "ارزها", unit: "تومان" },
 };
 
 function makeSection(group: string): HTMLDivElement {
   const d = document.createElement("div");
   d.className = "cur-sec";
-  d.textContent = GROUP_TITLES[group] || group;
+  const meta = GROUP_META[group] || { title: group, unit: "" };
+  const title = document.createElement("span");
+  title.textContent = meta.title;
+  const unit = document.createElement("span");
+  unit.className = "sec-unit";
+  unit.textContent = meta.unit;
+  d.append(title, unit);
   return d;
 }
 
@@ -57,17 +72,16 @@ function makeRow(it: CurrencyRow, selected: boolean): HTMLButtonElement {
   b.type = "button";
 
   const sym = document.createElement("span");
-  sym.className = "cur-sym";
+  sym.className = "cur-sym" + (it.symbol.length > 3 ? " long" : "");
   sym.textContent = it.symbol;
 
   const name = document.createElement("span");
   name.className = "cur-name";
   name.textContent = it.name;
 
-  const t = tomanOf(it);
   const price = document.createElement("span");
   price.className = "cur-price";
-  price.textContent = fmtPrice(t);
+  price.textContent = fmtPrice(it);
 
   const change = document.createElement("span");
   if (it.change_pct !== null) {
@@ -94,7 +108,8 @@ function render(p: AllPrices) {
   const sel = p.items.find((i) => i.id === p.selected);
   if (sel) {
     lastName = sel.name;
-    lastToman = tomanOf(sel);
+    lastValue = sel.value;
+    lastUnit = sel.unit;
   }
 
   listEl.replaceChildren();
@@ -114,8 +129,8 @@ function render(p: AllPrices) {
 const copyOrig = copyBtn.innerHTML;
 
 async function copyPrice() {
-  if (lastToman === null) return;
-  const text = `${lastName}: ${lastToman.toLocaleString("en-US")} تومان`;
+  if (lastValue === null) return;
+  const text = `${lastName}: ${fmtValue(lastValue, lastUnit)} ${lastUnit}`;
   try {
     await writeText(text);
     copyBtn.innerHTML = "کپی شد ✓";
