@@ -262,6 +262,9 @@ fn find_currency(id: &str) -> Option<&'static Currency> {
     CURRENCIES.iter().find(|c| c.id == id)
 }
 
+/// Display order of the sections in the window.
+const GROUP_ORDER: &[&str] = &["metal", "fx", "crypto", "oil", "base"];
+
 #[derive(Default, Clone, serde::Serialize, serde::Deserialize)]
 struct CurrencyPrice {
     /// Price in native unit: toman for Toman items, dollars for Dollar items.
@@ -309,8 +312,9 @@ struct AllPrices {
 fn snapshot(state: &AppState) -> AllPrices {
     let selected = state.selected.lock().unwrap().clone();
     let map = state.prices.lock().unwrap();
-    let items = CURRENCIES
+    let items = GROUP_ORDER
         .iter()
+        .flat_map(|g| CURRENCIES.iter().filter(move |c| c.group == *g))
         .map(|c| {
             let p = map.get(c.id).cloned().unwrap_or_default();
             CurrencyRow {
@@ -443,13 +447,18 @@ fn icon_text(value: Option<f64>, usd: bool) -> String {
     match value {
         Some(v) => {
             if usd {
-                let k = v / 1000.0;
-                if k >= 1000.0 {
-                    format!("{}M", ((v + 500_000.0) / 1_000_000.0).floor() as u64)
-                } else if k >= 10.0 {
-                    format!("{}", (k + 0.5).floor() as u64)
+                // Dollars are already human-scale: show them directly.
+                if v >= 10_000.0 {
+                    let k = ((v + 500.0) / 1000.0).floor() as u64;
+                    if k >= 1000 {
+                        format!("{}M", ((v + 500_000.0) / 1_000_000.0).floor() as u64)
+                    } else {
+                        format!("{k}K")
+                    }
+                } else if v >= 10.0 {
+                    format!("{}", (v + 0.5).floor() as u64)
                 } else {
-                    format!("{}.{}", k.floor() as u64, (k.fract() * 10.0).floor() as u64)
+                    format!("{}.{}", v.floor() as u64, (v.fract() * 10.0).floor() as u64)
                 }
             } else {
                 let thousands = ((v + 500.0) / 1000.0).floor() as u64;
@@ -802,11 +811,17 @@ mod tests {
         assert_eq!(icon_text(Some(5_266.0), false), "5.2"); // lira with decimal
         assert_eq!(icon_text(Some(1_700.0), false), "1.7");
         assert_eq!(icon_text(Some(500.0), false), "0.5");
-        assert_eq!(icon_text(Some(83_650.17), true), "84"); // bitcoin
-        assert_eq!(icon_text(Some(14_404.4), true), "14"); // copper
-        assert_eq!(icon_text(Some(3_216.5), true), "3.2"); // aluminum
-        assert_eq!(icon_text(Some(102.563), true), "0.1"); // oil
-        assert_eq!(icon_text(Some(1.0), true), "0.0"); // tether
+        assert_eq!(icon_text(Some(83_650.17), true), "84K"); // bitcoin
+        assert_eq!(icon_text(Some(14_404.4), true), "14K"); // copper
+        assert_eq!(icon_text(Some(15_985.0), true), "16K"); // nickel
+        assert_eq!(icon_text(Some(3_216.5), true), "3217"); // aluminum
+        assert_eq!(icon_text(Some(2_692.52), true), "2693"); // ethereum
+        assert_eq!(icon_text(Some(102.563), true), "103"); // oil
+        assert_eq!(icon_text(Some(118.84), true), "119"); // solana
+        assert_eq!(icon_text(Some(1.5), true), "1.5"); // ripple
+        assert_eq!(icon_text(Some(1.0), true), "1.0"); // tether
+        assert_eq!(icon_text(Some(0.335), true), "0.3"); // tron
+        assert_eq!(icon_text(Some(0.0937), true), "0.0"); // dogecoin
         assert_eq!(icon_text(None, false), "--");
         assert_eq!(icon_text(None, true), "--");
     }

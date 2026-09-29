@@ -23,6 +23,10 @@ const GLYPH_M: [u16; 6] = [
     0b1001, 0b1111, 0b1111, 0b1001, 0b1001, 0b1001,
 ]; // M (million suffix)
 
+const GLYPH_K: [u16; 6] = [
+    0b1001, 0b1010, 0b1100, 0b1010, 0b1001, 0b1001,
+]; // K (thousand-dollars suffix)
+
 const GLYPH_DOT: [u16; 6] = [0, 0, 0, 0, 0b0110, 0b0110]; // decimal point
 
 /// Splits the digits into rows that fit the 32x32 canvas.
@@ -127,6 +131,7 @@ pub fn render(text: &str) -> Vec<u8> {
             let glyph = match ch.to_digit(10) {
                 Some(d) => &GLYPHS[d as usize],
                 None if ch == 'M' || ch == 'm' => &GLYPH_M,
+                None if ch == 'K' || ch == 'k' => &GLYPH_K,
                 None if ch == '.' => &GLYPH_DOT,
                 None => &DASH,
             };
@@ -224,6 +229,14 @@ mod tests {
         // 3 chars -> scale 2 single row [10, 22); dot at x 14..17, y 18..21.
         assert!(band_has_pixels(&buf, 10, 22), "digits missing");
         assert!(opaque(&buf, 15, 19), "decimal dot missing");
+    }
+
+    #[test]
+    fn k_suffix_single_row() {
+        let buf = render("84K");
+        assert!(band_has_pixels(&buf, 10, 22), "glyphs missing");
+        assert!(!band_has_pixels(&buf, 0, 10), "unexpected pixels above");
+        assert!(!band_has_pixels(&buf, 22, 32), "unexpected pixels below");
     }
 
     #[test]
