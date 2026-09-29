@@ -43,11 +43,11 @@ body {
 
 .card {
   text-align: center;
-  padding: 10px 14px 16px;
+  padding: 8px 14px 10px;
   width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 h1 {

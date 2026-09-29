@@ -25,6 +25,7 @@ const errorEl = document.getElementById("error")!;
 const copyBtn = document.getElementById("copy") as HTMLButtonElement;
 const intervalSel = document.getElementById("interval") as HTMLSelectElement;
 const autostartChk = document.getElementById("autostart") as HTMLInputElement;
+const shownumberChk = document.getElementById("shownumber") as HTMLInputElement;
 const listEl = document.getElementById("cur-list")!;
 
 let lastValue: number | null = null;
@@ -185,6 +186,24 @@ async function initAutostart() {
   });
 }
 
+async function initShowNumber() {
+  try {
+    shownumberChk.checked = await invoke<boolean>("get_show_number");
+  } catch {
+    shownumberChk.checked = true;
+  }
+
+  shownumberChk.addEventListener("change", async () => {
+    try {
+      shownumberChk.checked = await invoke<boolean>("set_show_number", {
+        enabled: shownumberChk.checked,
+      });
+    } catch (e) {
+      errorEl.textContent = `⚠ خطا: ${e}`;
+    }
+  });
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   invoke<AllPrices>("get_all_prices").then(render);
   listen<AllPrices>("prices-updated", (e) => render(e.payload));
@@ -203,4 +222,5 @@ window.addEventListener("DOMContentLoaded", () => {
 
   initInterval();
   initAutostart();
+  initShowNumber();
 });

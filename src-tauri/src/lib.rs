@@ -1,7 +1,7 @@
 mod icon;
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -269,6 +269,7 @@ struct AppState {
     prices: Mutex<HashMap<String, CurrencyPrice>>,
     selected: Mutex<String>,
     refresh_secs: AtomicU64,
+    show_number: AtomicBool,
 }
 
 impl Default for AppState {
@@ -277,6 +278,7 @@ impl Default for AppState {
             prices: Mutex::new(HashMap::new()),
             selected: Mutex::new("dollar".to_string()),
             refresh_secs: AtomicU64::new(DEFAULT_REFRESH_SECS),
+            show_number: AtomicBool::new(true),
         }
     }
 }
@@ -476,7 +478,39 @@ fn fmt_usd(v: f64) -> String {
     }
 }
 
+/// The static app icon (used when the number display is turned off).
+fn app_icon_image() -> Image<'static> {
+    Image::from_bytes(include_bytes!("../icons/32x32.png"))
+        .unwrap_or_else(|_| Image::new_owned(vec![0u8; (W * H * 4) as usize], W, H))
+}
+
+/// Paints the tray icon: the live number, or the static app icon.
+fn update_tray_icon(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let img = if state.show_number.load(Ordering::Relaxed) {
+        let sel = state.selected.lock().unwrap().clone();
+        let entry = state
+            .prices
+            .lock()
+            .unwrap()
+            .get(&sel)
+            .cloned()
+            .unwrap_or_default();
+        let usd = matches!(
+            find_currency(&sel).map(|c| c.unit),
+            Some(Unit::Dollar)
+        );
+        Image::new_owned(icon::render(&icon_text(entry.value, usd)), W, H)
+    } else {
+        app_icon_image()
+    };
+    if let Some(tray) = app.tray_by_id("main") {
+        let _ = tray.set_icon(Some(img));
+    }
+}
+
 fn apply_selected(app: &AppHandle) {
+    update_tray_icon(app);
     let state = app.state::<AppState>();
     let sel = state.selected.lock().unwrap().clone();
     let entry = state
@@ -491,9 +525,6 @@ fn apply_selected(app: &AppHandle) {
     let name = cur.map(|c| c.name).unwrap_or("قیمت");
     let unit_label = cur.map(|c| c.unit.label()).unwrap_or("تومان");
     if let Some(tray) = app.tray_by_id("main") {
-        let text = icon_text(entry.value, usd);
-        let img = Image::new_owned(icon::render(&text), W, H);
-        let _ = tray.set_icon(Some(img));
         let tooltip = match entry.value {
             Some(v) => {
                 let price = if usd {
@@ -642,10 +673,14 @@ fn load_prices(app: &AppHandle) {
     }
 }
 
-fn currency_file(app: &AppHandle) -> Option<std::path::PathBuf> {
+fn config_file(app: &AppHandle, name: &str) -> Option<std::path::PathBuf> {
     let dir = app.path().app_config_dir().ok()?;
     let _ = std::fs::create_dir_all(&dir);
-    Some(dir.join("currency"))
+    Some(dir.join(name))
+}
+
+fn currency_file(app: &AppHandle) -> Option<std::path::PathBuf> {
+    config_file(app, "currency")
 }
 
 fn load_currency(app: &AppHandle) -> String {
@@ -658,6 +693,19 @@ fn load_currency(app: &AppHandle) -> String {
 fn save_currency(app: &AppHandle, id: &str) {
     if let Some(p) = currency_file(app) {
         let _ = std::fs::write(p, id);
+    }
+}
+
+fn load_show_number(app: &AppHandle) -> bool {
+    config_file(app, "show_number")
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .map(|s| s.trim() != "0")
+        .unwrap_or(true)
+}
+
+fn save_show_number(app: &AppHandle, enabled: bool) {
+    if let Some(p) = config_file(app, "show_number") {
+        let _ = std::fs::write(p, if enabled { "1" } else { "0" });
     }
 }
 
@@ -702,6 +750,21 @@ fn set_currency(app: AppHandle, id: String) -> AllPrices {
     select_currency(&app, &id)
 }
 
+#[tauri::command]
+fn get_show_number(state: State<AppState>) -> bool {
+    state.show_number.load(Ordering::Relaxed)
+}
+
+#[tauri::command]
+fn set_show_number(app: AppHandle, enabled: bool) -> bool {
+    save_show_number(&app, enabled);
+    app.state::<AppState>()
+        .show_number
+        .store(enabled, Ordering::Relaxed);
+    update_tray_icon(&app);
+    enabled
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -717,7 +780,9 @@ pub fn run() {
             refresh_now,
             get_refresh_interval,
             set_refresh_interval,
-            set_currency
+            set_currency,
+            get_show_number,
+            set_show_number
         ])
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -728,9 +793,19 @@ pub fn run() {
         .setup(|app| {
             let current = load_currency(app.handle());
             *app.state::<AppState>().selected.lock().unwrap() = current;
+            let show = load_show_number(app.handle());
+            app.state::<AppState>()
+                .show_number
+                .store(show, Ordering::Relaxed);
             load_prices(app.handle());
             // Paint the tray instantly from cache; fresh prices arrive in seconds.
             apply_selected(app.handle());
+
+            if let Some(w) = app.get_webview_window("main") {
+                if let Ok(icon) = Image::from_bytes(include_bytes!("../icons/128x128.png")) {
+                    let _ = w.set_icon(icon);
+                }
+            }
 
             let refresh = MenuItem::with_id(app, "refresh", "تازه‌سازی قیمت", true, None::<&str>)?;
             let details = MenuItem::with_id(app, "details", "نمایش جزئیات", true, None::<&str>)?;
