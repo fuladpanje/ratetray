@@ -5,6 +5,8 @@
 Live currency, gold and silver prices next to the Windows clock.
 
 <p align="center">
+  <img src="ratetray-scr.jpg" alt="RateTray window" width="360" />
+  <br />
   <img src="ratetray.jpg" alt="RateTray screenshot" width="400" />
 </p>
 

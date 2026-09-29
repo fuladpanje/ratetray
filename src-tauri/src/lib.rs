@@ -131,15 +131,6 @@ const CURRENCIES: &[Currency] = &[
         elem: None,
     },
     Currency {
-        id: "usdt",
-        name: "تتر",
-        symbol: "USDT",
-        group: "crypto",
-        unit: Unit::Dollar,
-        url: "https://tgju.org/profile/crypto-tether",
-        elem: None,
-    },
-    Currency {
         id: "trx",
         name: "ترون",
         symbol: "TRX",
@@ -819,7 +810,7 @@ mod tests {
         assert_eq!(icon_text(Some(102.563), true), "103"); // oil
         assert_eq!(icon_text(Some(118.84), true), "119"); // solana
         assert_eq!(icon_text(Some(1.5), true), "1.5"); // ripple
-        assert_eq!(icon_text(Some(1.0), true), "1.0"); // tether
+        assert_eq!(icon_text(Some(1.0), true), "1.0"); // one dollar
         assert_eq!(icon_text(Some(0.335), true), "0.3"); // tron
         assert_eq!(icon_text(Some(0.0937), true), "0.0"); // dogecoin
         assert_eq!(icon_text(None, false), "--");
