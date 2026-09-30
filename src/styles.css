@@ -215,6 +215,10 @@ h1 {
   min-height: 0;
 }
 
+.error.ok {
+  color: #4aee94;
+}
+
 .actions {
   display: flex;
   gap: 8px;
@@ -222,11 +226,17 @@ h1 {
 
 .actions button {
   flex: 1;
+  width: 100%;
   padding: 9px 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
+  background: #2e7d46;
+}
+
+.actions button:hover {
+  background: #37914f;
 }
 
 .actions button svg {

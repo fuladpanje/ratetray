@@ -22,15 +22,33 @@ interface AllPrices {
 }
 
 const errorEl = document.getElementById("error")!;
-const copyBtn = document.getElementById("copy") as HTMLButtonElement;
 const intervalSel = document.getElementById("interval") as HTMLSelectElement;
 const autostartChk = document.getElementById("autostart") as HTMLInputElement;
 const shownumberChk = document.getElementById("shownumber") as HTMLInputElement;
 const listEl = document.getElementById("cur-list")!;
 
-let lastValue: number | null = null;
-let lastName = "دلار";
-let lastUnit = "تومان";
+let okTimer: number | undefined;
+
+function showOk(msg: string) {
+  errorEl.className = "error ok";
+  errorEl.textContent = msg;
+  clearTimeout(okTimer);
+  okTimer = window.setTimeout(() => {
+    errorEl.textContent = "";
+    errorEl.className = "error";
+  }, 1500);
+}
+
+async function copyRow(it: CurrencyRow) {
+  if (it.value === null) return;
+  const text = `${it.name}: ${fmtValue(it.value, it.unit)} ${it.unit}`;
+  try {
+    await writeText(text);
+    showOk("کپی شد ✓");
+  } catch (e) {
+    errorEl.textContent = `⚠ کپی ناموفق: ${e}`;
+  }
+}
 
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
@@ -102,17 +120,11 @@ function makeRow(it: CurrencyRow, selected: boolean): HTMLButtonElement {
     const p = await invoke<AllPrices>("set_currency", { id: it.id });
     render(p);
   });
+  b.addEventListener("dblclick", () => copyRow(it));
   return b;
 }
 
 function render(p: AllPrices) {
-  const sel = p.items.find((i) => i.id === p.selected);
-  if (sel) {
-    lastName = sel.name;
-    lastValue = sel.value;
-    lastUnit = sel.unit;
-  }
-
   listEl.replaceChildren();
   let lastGroup = "";
   for (const it of p.items) {
@@ -125,22 +137,6 @@ function render(p: AllPrices) {
 
   const firstErr = p.items.map((i) => i.error).find((e) => e);
   errorEl.textContent = firstErr ? `⚠ ${firstErr}` : "";
-}
-
-const copyOrig = copyBtn.innerHTML;
-
-async function copyPrice() {
-  if (lastValue === null) return;
-  const text = `${lastName}: ${fmtValue(lastValue, lastUnit)} ${lastUnit}`;
-  try {
-    await writeText(text);
-    copyBtn.innerHTML = "کپی شد ✓";
-    setTimeout(() => {
-      copyBtn.innerHTML = copyOrig;
-    }, 1500);
-  } catch (e) {
-    errorEl.textContent = `⚠ کپی ناموفق: ${e}`;
-  }
 }
 
 async function initInterval() {
@@ -211,7 +207,6 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("refresh")!.addEventListener("click", () => {
     invoke("refresh_now");
   });
-  copyBtn.addEventListener("click", copyPrice);
 
   document.getElementById("gh-link")!.addEventListener("click", (e) => {
     e.preventDefault();
