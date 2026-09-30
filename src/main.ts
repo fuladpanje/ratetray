@@ -26,17 +26,15 @@ const intervalSel = document.getElementById("interval") as HTMLSelectElement;
 const autostartChk = document.getElementById("autostart") as HTMLInputElement;
 const shownumberChk = document.getElementById("shownumber") as HTMLInputElement;
 const listEl = document.getElementById("cur-list")!;
+const toastEl = document.getElementById("toast")!;
 
 let okTimer: number | undefined;
 
 function showOk(msg: string) {
-  errorEl.className = "error ok";
-  errorEl.textContent = msg;
+  toastEl.textContent = msg;
+  toastEl.classList.add("show");
   clearTimeout(okTimer);
-  okTimer = window.setTimeout(() => {
-    errorEl.textContent = "";
-    errorEl.className = "error";
-  }, 1500);
+  okTimer = window.setTimeout(() => toastEl.classList.remove("show"), 1500);
 }
 
 async function copyRow(it: CurrencyRow) {
@@ -116,15 +114,19 @@ function makeRow(it: CurrencyRow, selected: boolean): HTMLButtonElement {
   time.textContent = it.updated_at || "";
 
   b.append(sym, name, price, change, time);
-  b.addEventListener("click", async () => {
-    const p = await invoke<AllPrices>("set_currency", { id: it.id });
-    render(p);
+  b.addEventListener("click", () => {
+    invoke<AllPrices>("set_currency", { id: it.id });
+    listEl
+      .querySelectorAll(".cur-row.selected")
+      .forEach((r) => r.classList.remove("selected"));
+    b.classList.add("selected");
   });
   b.addEventListener("dblclick", () => copyRow(it));
   return b;
 }
 
 function render(p: AllPrices) {
+  const scrollTop = listEl.scrollTop;
   listEl.replaceChildren();
   let lastGroup = "";
   for (const it of p.items) {
@@ -134,6 +136,7 @@ function render(p: AllPrices) {
     }
     listEl.appendChild(makeRow(it, it.id === p.selected));
   }
+  listEl.scrollTop = scrollTop;
 
   const firstErr = p.items.map((i) => i.error).find((e) => e);
   errorEl.textContent = firstErr ? `⚠ ${firstErr}` : "";
