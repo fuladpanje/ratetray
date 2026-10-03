@@ -165,7 +165,7 @@ const CURRENCIES: &[Currency] = &[
         id: "usdt",
         name: "تتر",
         symbol: "USDT",
-        group: "crypto",
+        group: "fx",
         unit: Unit::Toman,
         ajax: "crypto-tether-irr",
     },
