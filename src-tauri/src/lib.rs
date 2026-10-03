@@ -162,6 +162,14 @@ const CURRENCIES: &[Currency] = &[
         ajax: "crypto-solana",
     },
     Currency {
+        id: "usdt",
+        name: "تتر",
+        symbol: "USDT",
+        group: "crypto",
+        unit: Unit::Toman,
+        ajax: "crypto-tether-irr",
+    },
+    Currency {
         id: "dollar",
         name: "دلار",
         symbol: "$",
@@ -254,7 +262,7 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             prices: Mutex::new(HashMap::new()),
-            selected: Mutex::new("dollar".to_string()),
+            selected: Mutex::new("usdt".to_string()),
             refresh_secs: AtomicU64::new(DEFAULT_REFRESH_SECS),
             show_number: AtomicBool::new(true),
         }
@@ -678,7 +686,7 @@ fn load_currency(app: &AppHandle) -> String {
     currency_file(app)
         .and_then(|p| std::fs::read_to_string(p).ok())
         .and_then(|s| find_currency(s.trim()).map(|c| c.id.to_string()))
-        .unwrap_or_else(|| "dollar".to_string())
+        .unwrap_or_else(|| "usdt".to_string())
 }
 
 fn save_currency(app: &AppHandle, id: &str) {
@@ -966,7 +974,7 @@ mod tests {
         // Every currency must map to a key we know exists in ajax.json.
         // (Full live-key check happens at runtime; here we assert the
         // mapping table itself is complete and non-empty.)
-        assert_eq!(CURRENCIES.len(), 23);
+        assert_eq!(CURRENCIES.len(), 24);
         for c in CURRENCIES {
             assert!(!c.ajax.is_empty(), "missing ajax key for {}", c.id);
         }

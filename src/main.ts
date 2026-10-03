@@ -70,7 +70,7 @@ const GROUP_META: Record<string, { title: string; unit: string }> = {
   fx: { title: "ارزها", unit: "تومان" },
 };
 
-function makeSection(group: string): HTMLDivElement {
+function makeSection(group: string, unitLabel: string): HTMLDivElement {
   const d = document.createElement("div");
   d.className = "cur-sec";
   const meta = GROUP_META[group] || { title: group, unit: "" };
@@ -78,7 +78,7 @@ function makeSection(group: string): HTMLDivElement {
   title.textContent = meta.title;
   const unit = document.createElement("span");
   unit.className = "sec-unit";
-  unit.textContent = meta.unit;
+  unit.textContent = unitLabel;
   d.append(title, unit);
   return d;
 }
@@ -133,10 +133,20 @@ function makeRow(it: CurrencyRow, selected: boolean): HTMLButtonElement {
 function render(p: AllPrices) {
   const scrollTop = listEl.scrollTop;
   listEl.replaceChildren();
+  // A group may mix units now (e.g. crypto has دلار coins + تومان تتر),
+  // so build the badge from the actual units instead of a fixed label.
+  const unitsByGroup = new Map<string, string[]>();
+  for (const it of p.items) {
+    const arr = unitsByGroup.get(it.group) ?? [];
+    if (!arr.includes(it.unit)) arr.push(it.unit);
+    unitsByGroup.set(it.group, arr);
+  }
   let lastGroup = "";
   for (const it of p.items) {
     if (it.group !== lastGroup) {
-      listEl.appendChild(makeSection(it.group));
+      listEl.appendChild(
+        makeSection(it.group, (unitsByGroup.get(it.group) ?? []).join(" / "))
+      );
       lastGroup = it.group;
     }
     listEl.appendChild(makeRow(it, it.id === p.selected));
