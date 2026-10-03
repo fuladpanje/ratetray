@@ -412,6 +412,15 @@ h1 {
   font-variant-numeric: tabular-nums;
 }
 
+.cur-time.err {
+  color: #ff6060;
+  font-weight: 700;
+}
+
+.cur-row.has-error .cur-price {
+  color: #ff9a9a;
+}
+
 .credit {
   text-align: center;
   font-size: 11px;

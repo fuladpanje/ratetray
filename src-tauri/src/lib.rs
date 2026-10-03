@@ -2,7 +2,7 @@ mod icon;
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use tauri::image::Image;
@@ -34,9 +34,9 @@ struct Currency {
     /// metal | base | oil | crypto | fx
     group: &'static str,
     unit: Unit,
-    url: &'static str,
-    /// info-bar element id; `None` = use the main price span of the profile page.
-    elem: Option<&'static str>,
+    /// Key inside the `current` object of tgju's `call*.tgju.org/ajax.json`
+    /// response (single request returns ALL prices at once).
+    ajax: &'static str,
 }
 
 const CURRENCIES: &[Currency] = &[
@@ -46,8 +46,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "Au",
         group: "metal",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/geram18",
-        elem: None,
+        ajax: "geram18",
     },
     Currency {
         id: "silver999",
@@ -55,8 +54,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "Ag",
         group: "metal",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/silver_999",
-        elem: None,
+        ajax: "silver_999",
     },
     Currency {
         id: "aluminum",
@@ -64,8 +62,8 @@ const CURRENCIES: &[Currency] = &[
         symbol: "Al",
         group: "base",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/aluminum",
-        elem: None,
+        // NOTE: tgju uses the British spelling in ajax.json
+        ajax: "aluminium",
     },
     Currency {
         id: "copper",
@@ -73,8 +71,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "Cu",
         group: "base",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/copper",
-        elem: None,
+        ajax: "copper",
     },
     Currency {
         id: "lead",
@@ -82,8 +79,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "Pb",
         group: "base",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/lead",
-        elem: None,
+        ajax: "lead",
     },
     Currency {
         id: "zinc",
@@ -91,8 +87,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "Zn",
         group: "base",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/zinc",
-        elem: None,
+        ajax: "zinc",
     },
     Currency {
         id: "nickel",
@@ -100,8 +95,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "Ni",
         group: "base",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/nickel",
-        elem: None,
+        ajax: "nickel",
     },
     Currency {
         id: "oilbrent",
@@ -109,8 +103,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "Br",
         group: "oil",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/oil_brent",
-        elem: None,
+        ajax: "oil_brent",
     },
     Currency {
         id: "btc",
@@ -118,8 +111,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "BTC",
         group: "crypto",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/crypto-bitcoin",
-        elem: None,
+        ajax: "crypto-bitcoin",
     },
     Currency {
         id: "eth",
@@ -127,8 +119,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "ETH",
         group: "crypto",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/crypto-ethereum",
-        elem: None,
+        ajax: "crypto-ethereum",
     },
     Currency {
         id: "trx",
@@ -136,8 +127,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "TRX",
         group: "crypto",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/crypto-tron",
-        elem: None,
+        ajax: "crypto-tron",
     },
     Currency {
         id: "xrp",
@@ -145,8 +135,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "XRP",
         group: "crypto",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/crypto-ripple",
-        elem: None,
+        ajax: "crypto-ripple",
     },
     Currency {
         id: "ada",
@@ -154,8 +143,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "ADA",
         group: "crypto",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/crypto-cardano",
-        elem: None,
+        ajax: "crypto-cardano",
     },
     Currency {
         id: "doge",
@@ -163,8 +151,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "DOGE",
         group: "crypto",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/crypto-dogecoin",
-        elem: None,
+        ajax: "crypto-dogecoin",
     },
     Currency {
         id: "sol",
@@ -172,8 +159,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "SOL",
         group: "crypto",
         unit: Unit::Dollar,
-        url: "https://tgju.org/profile/crypto-solana",
-        elem: None,
+        ajax: "crypto-solana",
     },
     Currency {
         id: "dollar",
@@ -181,8 +167,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "$",
         group: "fx",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/price_dollar_rtl",
-        elem: Some("l-price_dollar_rl"),
+        ajax: "price_dollar_rl",
     },
     Currency {
         id: "eur",
@@ -190,8 +175,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "€",
         group: "fx",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/price_eur",
-        elem: None,
+        ajax: "price_eur",
     },
     Currency {
         id: "cad",
@@ -199,8 +183,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "C$",
         group: "fx",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/price_cad",
-        elem: None,
+        ajax: "price_cad",
     },
     Currency {
         id: "try",
@@ -208,8 +191,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "₺",
         group: "fx",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/price_try",
-        elem: None,
+        ajax: "price_try",
     },
     Currency {
         id: "gbp",
@@ -217,8 +199,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "£",
         group: "fx",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/price_gbp",
-        elem: None,
+        ajax: "price_gbp",
     },
     Currency {
         id: "aed",
@@ -226,8 +207,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "د.إ",
         group: "fx",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/price_aed",
-        elem: None,
+        ajax: "price_aed",
     },
     Currency {
         id: "cny",
@@ -235,8 +215,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "¥",
         group: "fx",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/price_cny",
-        elem: None,
+        ajax: "price_cny",
     },
     Currency {
         id: "jpy",
@@ -244,8 +223,7 @@ const CURRENCIES: &[Currency] = &[
         symbol: "¥",
         group: "fx",
         unit: Unit::Toman,
-        url: "https://tgju.org/profile/price_jpy",
-        elem: None,
+        ajax: "price_jpy",
     },
 ];
 
@@ -326,63 +304,114 @@ fn snapshot(state: &AppState) -> AllPrices {
     AllPrices { selected, items }
 }
 
-fn parse_price(html: &str, cur: &Currency) -> Result<(f64, Option<f64>), String> {
-    if let Some(elem) = cur.elem {
-        let re = regex::Regex::new(&format!(
-            r#"(?s)<li id="{elem}".*?info-price">([\d,]+)</span>.*?info-change">\((-?[\d.]+)%\)"#
-        ))
-        .map_err(|_| "خطای داخلی برنامه".to_string())?;
-        let caps = re
-            .captures(html)
-            .ok_or_else(|| "اطلاعات قیمت در پاسخ سایت پیدا نشد".to_string())?;
-        let rial: f64 = caps[1]
-            .replace(',', "")
-            .parse::<f64>()
-            .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())?;
-        let change: f64 = caps[2]
-            .parse()
-            .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())?;
-        Ok((rial / 10.0, Some(change)))
-    } else {
-        let re_price = regex::Regex::new(
-            r#"<span class="price" data-col="info\.last_trade\.PDrCotVal">([\d,.]+)</span>"#,
-        )
-        .map_err(|_| "خطای داخلی برنامه".to_string())?;
-        let re_change = regex::Regex::new(
-            r#"<span class="change change-(up|down|no) change-percentage">([^<]*)<"#,
-        )
-        .map_err(|_| "خطای داخلی برنامه".to_string())?;
+/// One shared HTTP client for the whole process: keeps connections alive
+/// (connection pooling), so each refresh is 1 small request instead of
+/// 24 separate TLS handshakes. This alone removes most of the old errors.
+fn http_client() -> reqwest::Client {
+    static CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+    CLIENT
+        .get_or_init(|| {
+            reqwest::Client::builder()
+                .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+                .timeout(Duration::from_secs(15))
+                .pool_max_idle_per_host(4)
+                .build()
+                .expect("http client")
+        })
+        .clone()
+}
 
-        let price_cap = re_price
-            .captures(html)
-            .ok_or_else(|| "اطلاعات قیمت در پاسخ سایت پیدا نشد".to_string())?;
-        let raw: f64 = price_cap[1]
-            .replace(',', "")
-            .parse::<f64>()
-            .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())?;
-        let value = match cur.unit {
-            Unit::Toman => raw / 10.0,
-            Unit::Dollar => raw,
-        };
+/// tgju's live-price mirrors. `call` is primary; `call1..call5` are the
+/// same data used by tgju.org itself for its live tables.
+const AJAX_MIRRORS: &[&str] = &[
+    "https://call.tgju.org/ajax.json",
+    "https://call1.tgju.org/ajax.json",
+    "https://call2.tgju.org/ajax.json",
+    "https://call3.tgju.org/ajax.json",
+    "https://call4.tgju.org/ajax.json",
+    "https://call5.tgju.org/ajax.json",
+];
 
-        let change_cap = re_change
-            .captures(html)
-            .ok_or_else(|| "اطلاعات قیمت در پاسخ سایت پیدا نشد".to_string())?;
-        let change = if &change_cap[1] == "no" {
+/// A single entry of ajax.json's `current` object, e.g.
+/// `"price_dollar_rl": {"p": "2,679,000", "dp": 0, ...}`.
+/// `p`/`dp` can be numbers or comma-formatted strings, hence `Value`.
+#[derive(Debug, Clone, serde::Deserialize, Default)]
+struct AjaxEntry {
+    #[serde(default)]
+    p: Option<serde_json::Value>,
+    #[serde(default)]
+    dp: Option<serde_json::Value>,
+}
+
+fn json_num(v: &serde_json::Value) -> Option<f64> {
+    match v {
+        serde_json::Value::Number(n) => n.as_f64(),
+        serde_json::Value::String(s) => s.replace(',', "").trim().parse::<f64>().ok(),
+        _ => None,
+    }
+}
+
+/// Converts one ajax.json entry to (value, change_pct).
+/// Toman items are quoted in rial by tgju → divide by 10.
+fn ajax_value(cur: &Currency, e: &AjaxEntry) -> Result<(f64, Option<f64>), String> {
+    let raw = e
+        .p
+        .as_ref()
+        .and_then(json_num)
+        .ok_or_else(|| "اطلاعات قیمت در پاسخ سایت پیدا نشد".to_string())?;
+    let value = match cur.unit {
+        Unit::Toman => raw / 10.0,
+        Unit::Dollar => raw,
+    };
+    let change = e.dp.as_ref().and_then(json_num).and_then(|dp| {
+        if dp.abs() < 0.0005 {
             None
         } else {
-            let magnitude: f64 = change_cap[2]
-                .trim()
-                .parse()
-                .map_err(|_| "پاسخ سایت قابل پردازش نبود".to_string())?;
-            Some(if &change_cap[1] == "down" {
-                -magnitude.abs()
-            } else {
-                magnitude.abs()
-            })
-        };
-        Ok((value, change))
+            Some(dp)
+        }
+    });
+    Ok((value, change))
+}
+
+/// Fetches the whole market in ONE request (~170KB JSON) instead of
+/// 24 separate HTML page scrapes. Tries mirrors in order.
+async fn fetch_ajax_map() -> Result<HashMap<String, AjaxEntry>, String> {
+    let client = http_client();
+    let mut last_err = "مشکل در برقراری ارتباط".to_string();
+    for url in AJAX_MIRRORS {
+        match client.get(*url).send().await {
+            Ok(resp) => match resp.text().await {
+                Ok(text) => match serde_json::from_str::<serde_json::Value>(&text) {
+                    Ok(v) => {
+                        if let Some(cur) = v.get("current").and_then(|c| c.as_object()) {
+                            let map: HashMap<String, AjaxEntry> = cur
+                                .iter()
+                                .map(|(k, val)| {
+                                    (
+                                        k.clone(),
+                                        serde_json::from_value::<AjaxEntry>(val.clone())
+                                            .unwrap_or_default(),
+                                    )
+                                })
+                                .collect();
+                            if !map.is_empty() {
+                                return Ok(map);
+                            }
+                            last_err = "اطلاعات قیمت در پاسخ سایت پیدا نشد".to_string();
+                        } else {
+                            last_err = "پاسخ سایت قابل پردازش نبود".to_string();
+                        }
+                    }
+                    Err(_) => last_err = "پاسخ سایت قابل پردازش نبود".to_string(),
+                },
+                Err(_) => last_err = "مشکل در برقراری ارتباط".to_string(),
+            },
+            Err(e) => {
+                last_err = friendly(&e.to_string());
+            }
+        }
     }
+    Err(last_err)
 }
 
 /// Maps technical request errors to a user-friendly Persian message.
@@ -398,25 +427,6 @@ fn friendly(err: &str) -> String {
     } else {
         "مشکل در دریافت اطلاعات از سایت".to_string()
     }
-}
-
-async fn fetch_price(cur: &Currency) -> Result<(f64, Option<f64>), String> {
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-        .timeout(Duration::from_secs(20))
-        .build()
-        .map_err(|_| "خطای داخلی برنامه".to_string())?;
-
-    let html = client
-        .get(cur.url)
-        .send()
-        .await
-        .map_err(|e| friendly(&e.to_string()))?
-        .text()
-        .await
-        .map_err(|_| "مشکل در برقراری ارتباط".to_string())?;
-
-    parse_price(&html, cur)
 }
 
 fn group(n: u64) -> String {
@@ -553,77 +563,60 @@ fn apply_selected(app: &AppHandle) {
 const W: u32 = 32;
 const H: u32 = 32;
 
-async fn do_fetch(app: &AppHandle, id: &str) {
-    let cur = match find_currency(id) {
-        Some(c) => c,
-        None => return,
-    };
+/// Refreshes ALL currencies with a single ajax.json request.
+/// One request instead of 24 page scrapes: much faster and almost
+/// never rate-limited. Values are preserved on failure so the UI can
+/// keep showing the last good price with a red timestamp.
+async fn do_fetch_all(app: &AppHandle) {
     let state = app.state::<AppState>();
-    match fetch_price(cur).await {
-        Ok((value, change)) => {
-            let mut map = state.prices.lock().unwrap();
-            let entry = map.entry(id.to_string()).or_default();
-            entry.value = Some(value);
-            entry.change_pct = change;
-            entry.updated_at = Some(chrono::Local::now().format("%H:%M").to_string());
-            entry.error = None;
+    // One retry for transient blips (mirror rotation inside makes it cheap).
+    let mut result = fetch_ajax_map().await;
+    if result.is_err() {
+        result = fetch_ajax_map().await;
+    }
+    match result {
+        Ok(map) => {
+            let now = chrono::Local::now().format("%H:%M").to_string();
+            let mut prices = state.prices.lock().unwrap();
+            for c in CURRENCIES {
+                match map.get(c.ajax) {
+                    Some(entry) => match ajax_value(c, entry) {
+                        Ok((value, change)) => {
+                            let e = prices.entry(c.id.to_string()).or_default();
+                            e.value = Some(value);
+                            e.change_pct = change;
+                            e.updated_at = Some(now.clone());
+                            e.error = None;
+                        }
+                        Err(msg) => {
+                            prices.entry(c.id.to_string()).or_default().error = Some(msg);
+                        }
+                    },
+                    None => {
+                        prices.entry(c.id.to_string()).or_default().error =
+                            Some("اطلاعات قیمت در پاسخ سایت پیدا نشد".to_string());
+                    }
+                }
+            }
         }
         Err(e) => {
-            let mut map = state.prices.lock().unwrap();
-            map.entry(id.to_string()).or_default().error = Some(e);
+            // Total failure: keep old values, flag every row as stale.
+            // (Frontend paints their timestamps red.)
+            let mut prices = state.prices.lock().unwrap();
+            for c in CURRENCIES {
+                prices.entry(c.id.to_string()).or_default().error = Some(e.clone());
+            }
         }
     }
     save_prices(app);
-    let selected = state.selected.lock().unwrap().clone();
-    if selected == id {
-        apply_selected(app);
-    }
+    apply_selected(app);
     let _ = app.emit("prices-updated", snapshot(&state));
 }
 
-/// Fetches all currencies with limited concurrency (batches of 6):
-/// fast, but gentle enough not to get throttled by the source site.
-/// Failed items get one retry pass in smaller batches.
+/// Blocking wrapper for the periodic timer thread (single request,
+/// no thread fan-out needed anymore).
 fn fetch_all_blocking(app: &AppHandle) {
-    for chunk in CURRENCIES.chunks(6) {
-        let handles: Vec<std::thread::JoinHandle<()>> = chunk
-            .iter()
-            .map(|c| {
-                let app = app.clone();
-                let id = c.id;
-                std::thread::spawn(move || {
-                    tauri::async_runtime::block_on(do_fetch(&app, id));
-                })
-            })
-            .collect();
-        for h in handles {
-            let _ = h.join();
-        }
-    }
-    let retry: Vec<&'static str> = {
-        let state = app.state::<AppState>();
-        let map = state.prices.lock().unwrap();
-        CURRENCIES
-            .iter()
-            .filter(|c| map.get(c.id).is_some_and(|e| e.error.is_some()))
-            .map(|c| c.id)
-            .collect()
-    };
-    for chunk in retry.chunks(3) {
-        let handles: Vec<std::thread::JoinHandle<()>> = chunk
-            .iter()
-            .map(|id| {
-                let app = app.clone();
-                let id = *id;
-                std::thread::spawn(move || {
-                    tauri::async_runtime::block_on(do_fetch(&app, id));
-                })
-            })
-            .collect();
-        for h in handles {
-            let _ = h.join();
-        }
-    }
+    tauri::async_runtime::block_on(do_fetch_all(app));
 }
 
 fn spawn_all(app: &AppHandle) {
@@ -641,11 +634,9 @@ fn show_window(app: &AppHandle) {
 }
 
 fn spawn_selected(app: &AppHandle) {
-    let app = app.clone();
-    std::thread::spawn(move || {
-        let id = app.state::<AppState>().selected.lock().unwrap().clone();
-        tauri::async_runtime::block_on(do_fetch(&app, &id));
-    });
+    // A full refresh is just 1 small JSON request now, so reuse it:
+    // selecting a currency refreshes everything, not just one row.
+    spawn_all(app);
 }
 
 fn prices_file(app: &AppHandle) -> Option<std::path::PathBuf> {
@@ -894,87 +885,94 @@ mod tests {
 
     #[test]
     fn friendly_maps_connection_errors() {
-        let raw = "error sending request for url (https://tgju.org/profile/price_dollar_rtl)";
+        let raw = "error sending request for url (https://call.tgju.org/ajax.json)";
         assert_eq!(friendly(raw), "مشکل در برقراری ارتباط");
         assert_eq!(friendly("dns error"), "مشکل در برقراری ارتباط");
         assert_eq!(friendly("operation timed out"), "مشکل در برقراری ارتباط");
     }
 
-    #[test]
-    fn parse_infobar_branch() {
-        let cur = Currency {
+    fn toman_cur() -> Currency {
+        Currency {
             id: "t",
             name: "تست",
             symbol: "$",
             group: "fx",
             unit: Unit::Toman,
-            url: "",
-            elem: Some("l-test"),
-        };
-        let html = r#"<li id="l-test" class=" high"><span class="info-value"><span class="info-price">2,537,000</span> <span class="info-change">(3.64%)</span></span></li>"#;
-        assert_eq!(parse_price(html, &cur), Ok((253_700.0, Some(3.64))));
+            ajax: "price_dollar_rl",
+        }
     }
 
-    #[test]
-    fn parse_main_branch_up_down() {
-        let cur = Currency {
-            id: "t",
-            name: "تست",
-            symbol: "₺",
-            group: "fx",
-            unit: Unit::Toman,
-            url: "",
-            elem: None,
-        };
-        let up = r#"<span class="price" data-col="info.last_trade.PDrCotVal">52,665</span><span class="change-tag" data-col="info.last_trade.last_change_percentage"><span class="change change-up change-percentage">3.74</span></span>"#;
-        assert_eq!(parse_price(up, &cur), Ok((5_266.5, Some(3.74))));
-        let down = up.replace("change-up", "change-down");
-        assert_eq!(parse_price(&down, &cur), Ok((5_266.5, Some(-3.74))));
-    }
-
-    #[test]
-    fn parse_dollar_branch() {
-        let cur = Currency {
+    fn dollar_cur() -> Currency {
+        Currency {
             id: "t",
             name: "تست",
             symbol: "Br",
             group: "oil",
             unit: Unit::Dollar,
-            url: "",
-            elem: None,
-        };
-        let html = r#"<span class="price" data-col="info.last_trade.PDrCotVal">102.563</span><span class="change-tag" data-col="info.last_trade.last_change_percentage"><span class="change change-up change-percentage">0.13</span></span>"#;
-        assert_eq!(parse_price(html, &cur), Ok((102.563, Some(0.13))));
+            ajax: "oil_brent",
+        }
+    }
+
+    fn entry(p: &str, dp: f64) -> AjaxEntry {
+        AjaxEntry {
+            p: Some(serde_json::Value::String(p.to_string())),
+            dp: Some(serde_json::Value::from(dp)),
+        }
     }
 
     #[test]
-    fn parse_no_change_branch() {
-        let cur = Currency {
-            id: "t",
-            name: "تست",
-            symbol: "Al",
-            group: "base",
-            unit: Unit::Dollar,
-            url: "",
-            elem: None,
-        };
-        let html = r#"<span class="price" data-col="info.last_trade.PDrCotVal">3,216.5</span> <span class="change-tag" data-col="info.last_trade.last_change_percentage"> <span class="change change-no change-percentage">-</span> </span>"#;
-        assert_eq!(parse_price(html, &cur), Ok((3_216.5, None)));
+    fn ajax_toman_divides_rial_by_ten() {
+        // ajax.json quotes toman items in rial ("2,679,000" → 267,900 toman)
+        assert_eq!(
+            ajax_value(&toman_cur(), &entry("2,679,000", 0.0)),
+            Ok((267_900.0, None))
+        );
+        assert_eq!(
+            ajax_value(&toman_cur(), &entry("262,253,000", 2.07)),
+            Ok((26_225_300.0, Some(2.07)))
+        );
     }
 
     #[test]
-    fn parse_failure_is_friendly() {
-        let cur = Currency {
-            id: "t",
-            name: "تست",
-            symbol: "$",
-            group: "fx",
-            unit: Unit::Toman,
-            url: "",
-            elem: Some("l-missing"),
+    fn ajax_dollar_keeps_value() {
+        assert_eq!(
+            ajax_value(&dollar_cur(), &entry("102.563", 0.13)),
+            Ok((102.563, Some(0.13)))
+        );
+        assert_eq!(
+            ajax_value(&dollar_cur(), &entry("3,216.5", 0.0)),
+            Ok((3_216.5, None))
+        );
+    }
+
+    #[test]
+    fn ajax_numeric_price_forms() {
+        // `p`/`dp` may arrive as JSON numbers instead of strings.
+        let e = AjaxEntry {
+            p: Some(serde_json::Value::from(84866.26)),
+            dp: Some(serde_json::Value::from(0.03)),
         };
-        let err = parse_price("<html></html>", &cur).unwrap_err();
-        assert!(!err.contains("error sending request"));
+        assert_eq!(ajax_value(&dollar_cur(), &e), Ok((84866.26, Some(0.03))));
+    }
+
+    #[test]
+    fn ajax_missing_price_is_friendly() {
+        let err = ajax_value(&toman_cur(), &AjaxEntry::default()).unwrap_err();
         assert_eq!(err, "اطلاعات قیمت در پاسخ سایت پیدا نشد");
+    }
+
+    #[test]
+    fn ajax_keys_cover_all_currencies() {
+        // Every currency must map to a key we know exists in ajax.json.
+        // (Full live-key check happens at runtime; here we assert the
+        // mapping table itself is complete and non-empty.)
+        assert_eq!(CURRENCIES.len(), 23);
+        for c in CURRENCIES {
+            assert!(!c.ajax.is_empty(), "missing ajax key for {}", c.id);
+        }
+        let dollar = CURRENCIES.iter().find(|c| c.id == "dollar").unwrap();
+        assert_eq!(dollar.ajax, "price_dollar_rl");
+        let alu = CURRENCIES.iter().find(|c| c.id == "aluminum").unwrap();
+        assert_eq!(alu.ajax, "aluminium"); // British spelling on tgju side
     }
 }

@@ -110,8 +110,13 @@ function makeRow(it: CurrencyRow, selected: boolean): HTMLButtonElement {
   }
 
   const time = document.createElement("span");
-  time.className = "cur-time";
+  time.className = "cur-time" + (it.error ? " err" : "");
   time.textContent = it.updated_at || "";
+  if (it.error) {
+    time.title = it.error;
+    b.classList.add("has-error");
+    b.title = it.error;
+  }
 
   b.append(sym, name, price, change, time);
   b.addEventListener("click", () => {
@@ -138,8 +143,13 @@ function render(p: AllPrices) {
   }
   listEl.scrollTop = scrollTop;
 
-  const firstErr = p.items.map((i) => i.error).find((e) => e);
-  errorEl.textContent = firstErr ? `⚠ ${firstErr}` : "";
+  const errs = p.items.filter((i) => i.error);
+  if (errs.length > 0) {
+    const extra = errs.length > 1 ? ` (${errs.length} مورد)` : "";
+    errorEl.textContent = `⚠ ${errs[0].error}${extra} — ساعت قرمزها قدیمی است`;
+  } else {
+    errorEl.textContent = "";
+  }
 }
 
 async function initInterval() {
